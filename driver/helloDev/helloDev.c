@@ -1,6 +1,7 @@
 #include <linux/module.h>
 #include <linux/moduleparam.h>
 #include <linux/cdev.h>
+#include <linux/platform_device.h>
 #include <linux/fs.h>
 #include <linux/wait.h>
 #include <linux/poll.h>
@@ -20,6 +21,9 @@ int reg_major = 232;
 int reg_minor = 0;
 char *buffer;
 int flag = 0;
+
+#define LEDBASE	0x56000010
+#define LEDLEN	0x0c
 
 int hello_open(struct inode *p, struct file *f)
 {
@@ -42,8 +46,10 @@ ssize_t hello_read(struct file *f, char __user *u, size_t s, loff_t *l)
 	return 0;
 }
 
-int hello_init(void)
+static int hellodev_probe(struct platform_device *pdev)
 {
+	printk(KERN_INFO "hellodev_probe\n");
+
 	/* Create dev number by MKDEV */
 	devNum = MKDEV(reg_major, reg_minor);
 
@@ -74,17 +80,66 @@ int hello_init(void)
 	return 0;
 }
 
-void __exit hello_exit(void)
+static int hellodev_remove(struct platform_device *pdev)
 {
+	printk(KERN_INFO "hellodev_remove \n");
 	cdev_del(gDev);
+	kfree(gFile);
+	kfree(gDev);
 	unregister_chrdev_region(devNum, subDevNum);
+
+	return 0;
+}
+
+static void hello_plat_release(struct device *dev)
+{
+	return;
+}
+
+static struct resource hello_dev_resource[] = {
+	[0] = {
+		.start	= LEDBASE,
+		.end	= LEDBASE + LEDLEN - 1,
+	}
+};
+
+struct platform_device hello_device = {
+	.name		= "hello-dev",
+	.id		= -1,
+	.num_resources	= ARRAY_SIZE(hello_dev_resource),
+	.resource	= hello_dev_resource,
+	.dev = {
+		.release = hello_plat_release,
+	}
+};
+
+static struct platform_driver hellodev_driver = {
+	.probe	= hellodev_probe,
+	.remove	= hellodev_remove,
+	.driver	={
+		.owner	= THIS_MODULE,
+		.name	= "hello-dev",
+	},
+};
+
+int charDrvInit(void)
+{
+	platform_device_register(&hello_device);
+
+	return platform_driver_register(&hellodev_driver);
+}
+
+void __exit charDrvExit(void)
+{
+	platform_device_unregister(&hello_device);
+	platform_driver_unregister(&hellodev_driver);
 
 	return;
 }
 
 /* the entry function of driver */
-module_init(hello_init);
+module_init(charDrvInit);
 /* the exit function of driver */
-module_exit(hello_exit);
+module_exit(charDrvExit);
 /* Copyright statement */
 MODULE_LICENSE("GPL");

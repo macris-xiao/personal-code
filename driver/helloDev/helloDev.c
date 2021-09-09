@@ -11,7 +11,7 @@
 #define OK		(0)
 #define ERROR		(-1)
 
-struct cdev *gDEV;
+struct cdev *gDev;
 struct file_operations *gFile;
 
 dev_t devNum;
